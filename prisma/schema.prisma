@@ -1,0 +1,109 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  lgu_admin
+  worker
+}
+
+enum AdminStatus {
+  pending
+  active
+}
+
+enum WorkerStatus {
+  pending
+  active
+  inactive
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime   @default(now())
+
+  lguAdmin     LGUAdmin?
+  worker       Worker?
+}
+
+model LGUAdmin {
+  id            String      @id @default(uuid())
+  userId        String      @unique
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  lguName       String
+  province      String
+  region        String
+  adminName     String
+  email         String
+  officeContact String
+  address       String      @default("")
+  status        AdminStatus @default(active)
+  createdAt     DateTime    @default(now())
+
+  workers       Worker[]
+}
+
+model Worker {
+  id            String       @id @default(uuid())
+  userId        String       @unique
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  lguAdminId    String
+  lguAdmin      LGUAdmin     @relation(fields: [lguAdminId], references: [id])
+
+  fullName      String
+  email         String
+  phone         String
+  specialization String
+  municipality  String
+  barangay      String
+  about         String       @default("")
+  status        WorkerStatus @default(pending)
+  createdAt     DateTime     @default(now())
+
+  reviews       Review[]
+  otpSessions   OTPSession[]
+}
+
+model Review {
+  id           String   @id @default(uuid())
+  workerId     String
+  worker       Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  rating       Int
+  comment      String
+  serviceDate  String
+  phoneHash    String
+  maskedPhone  String
+  createdAt    DateTime @default(now())
+
+  @@unique([phoneHash, workerId])
+}
+
+model OTPSession {
+  id               String   @id @default(uuid())
+  workerId         String
+  worker           Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  phone            String
+  phoneHash        String
+  code             String
+  reviewRating     Int
+  reviewComment    String
+  reviewServiceDate String
+  sessionExpiresAt DateTime
+  otpExpiresAt     DateTime
+  used             Boolean  @default(false)
+  createdAt        DateTime @default(now())
+}

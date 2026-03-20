@@ -1,4 +1,6 @@
-export function logout() {
-  // TODO: call POST /api/auth/logout to clear server session
+export async function logout() {
+  try {
+    await fetch("/api/auth/logout", { method: "POST" });
+  } catch { /* ignore */ }
   window.location.href = "/login";
 }

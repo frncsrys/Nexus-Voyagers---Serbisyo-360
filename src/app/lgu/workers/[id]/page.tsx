@@ -1,176 +1,106 @@
 "use client";
 
-import { useState } from "react";
-import Image from "next/image";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import {
-  LayoutDashboard, Users, ClipboardCheck, BarChart3,
-  CheckCircle2, XCircle, Clock, MapPin, Calendar,
-  Star, Phone, Mail, ArrowLeft, Menu, X, LogOut,
-  Shield, AlertTriangle
-} from "lucide-react";
+import { useRouter, useParams } from "next/navigation";
+import { CheckCircle2, XCircle, Clock, MapPin, Calendar, Star, Phone, Mail, ArrowLeft, Menu, Shield, AlertTriangle } from "lucide-react";
+import Sidebar from "@/components/lgu/Sidebar";
 
-const MOCK_WORKER = {
-  id: "w-001",
-  fullName: "Jane Doe",
-  specialization: "Crop Production",
-  municipality: "Quiapo",
-  barangay: "Barangay 176",
-  province: "Metro Manila",
-  phone: "+63 912 345 6789",
-  email: "jane.doe@email.com",
-  status: "active" as "active" | "pending" | "inactive",
-  rating: 4.9,
-  totalReviews: 31,
-  joinedAt: "January 12, 2026",
-  lguName: "City of Manila",
-};
-
-const MOCK_REVIEWS = [
-  { id: "r-1", rating: 5, comment: "Very helpful and knowledgeable about crop techniques. Highly recommended!", serviceDate: "Mar 15, 2026", maskedPhone: "+63 9** **** 789" },
-  { id: "r-2", rating: 5, comment: "Gave excellent advice on irrigation methods. Came on time and was very professional.", serviceDate: "Mar 10, 2026", maskedPhone: "+63 9** **** 321" },
-  { id: "r-3", rating: 4, comment: "Good service overall. Could explain things more clearly but very helpful.", serviceDate: "Mar 5, 2026", maskedPhone: "+63 9** **** 654" },
-  { id: "r-4", rating: 5, comment: "Outstanding work! My harvest improved significantly after following her advice.", serviceDate: "Feb 28, 2026", maskedPhone: "+63 9** **** 987" },
-];
-
-const RATING_BREAKDOWN = [
-  { stars: 5, count: 24 },
-  { stars: 4, count: 5 },
-  { stars: 3, count: 1 },
-  { stars: 2, count: 0 },
-  { stars: 1, count: 1 },
-];
-
-const NAV_ITEMS = [
-  { icon: LayoutDashboard, label: "Dashboard", href: "/lgu/dashboard", active: false },
-  { icon: BarChart3, label: "Analytics & Reports", href: "/lgu/analytics", active: false },
-  { icon: Users, label: "Manage Workers", href: "/lgu/workers", active: true },
-  { icon: ClipboardCheck, label: "Pending Approvals", href: "/lgu/approvals", active: false, badge: 3 },
-];
-
-function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose?: () => void }) {
-  return (
-    <div className={`flex flex-col h-full bg-[#0a2e18] ${mobile ? "w-full" : "w-64"}`}>
-      <div className="p-6 border-b border-white/10">
-        <div className="flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5">
-            <Image src="/serbisyo360-logo.png" alt="Serbisyo360" width={36} height={36} />
-            <span className="font-display font-bold text-white text-base">
-              Serbisyo<span className="text-[#a8e6bf]">360</span>
-            </span>
-          </Link>
-          {mobile && <button onClick={onClose} className="text-white/60 hover:text-white"><X size={20} /></button>}
-        </div>
-        <p className="text-white/40 text-[10px] mt-1">LGU Admin Portal</p>
-      </div>
-      <nav className="flex-1 p-4 space-y-1">
-        {NAV_ITEMS.map(({ icon: Icon, label, href, active, badge }) => (
-          <Link key={label} href={href}
-            className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all text-sm font-medium ${active ? "bg-white/15 text-white" : "text-white/60 hover:text-white hover:bg-white/8"}`}>
-            <span className="flex items-center gap-3"><Icon size={17} />{label}</span>
-            {badge && <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{badge}</span>}
-          </Link>
-        ))}
-      </nav>
-      <div className="p-4 border-t border-white/10">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-9 h-9 rounded-xl bg-[#1a7a45] flex items-center justify-center text-white font-display font-bold text-sm">FC</div>
-          <div>
-            <p className="text-white text-xs font-semibold">Francis Carabasa</p>
-            <p className="text-white/40 text-[10px]">Quiapo, Manila LGU</p>
-          </div>
-        </div>
-        <button className="flex items-center gap-2 text-white/40 hover:text-white/70 text-xs transition-colors">
-          <LogOut size={14} />Log out
-        </button>
-      </div>
-    </div>
-  );
+interface WorkerDetail {
+  id: string; fullName: string; specialization: string; municipality: string;
+  barangay: string; province: string; phone: string; email: string;
+  status: "active" | "pending" | "inactive"; rating: number; totalReviews: number;
+  joinedAt: string; lguName: string; about: string;
+  ratingBreakdown: { stars: number; count: number }[];
+  reviews: { id: string; rating: number; comment: string; serviceDate: string; maskedPhone: string; createdAt: string }[];
 }
 
 export default function WorkerDetailPage() {
+  const router = useRouter();
+  const params = useParams();
+  const workerId = params.id as string;
+
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [worker, setWorker] = useState(MOCK_WORKER);
+  const [worker, setWorker] = useState<WorkerDetail | null>(null);
+  const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<"approving" | "rejecting" | "deactivating" | null>(null);
   const [confirmAction, setConfirmAction] = useState<"reject" | "deactivate" | null>(null);
 
-  const handleStatusChange = (action: "approve" | "reject" | "deactivate") => {
+  const fetchWorker = () => {
+    fetch(`/api/lgu/workers/${workerId}`)
+      .then((r) => { if (r.status === 401 || r.status === 403) { router.push("/login"); return null; } return r.json(); })
+      .then((d) => { if (d && !d.error) setWorker(d); })
+      .catch(() => router.push("/lgu/workers"))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchWorker(); }, [workerId]);
+
+  const handleStatusChange = async (action: "approve" | "reject" | "deactivate") => {
     const loadingKey = action === "approve" ? "approving" : action === "reject" ? "rejecting" : "deactivating";
     setActionLoading(loadingKey);
     setConfirmAction(null);
-    // TODO: call PATCH /api/workers/[id]/status
-    setTimeout(() => {
-      setActionLoading(null);
-      setWorker((w) => ({
-        ...w,
-        status: action === "approve" ? "active" : action === "reject" ? "inactive" : "inactive",
-      }));
-    }, 1200);
+    try {
+      const newStatus = action === "approve" ? "active" : "inactive";
+      const res = await fetch(`/api/workers/${workerId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (res.ok) {
+        setWorker((w) => w ? { ...w, status: newStatus as WorkerDetail["status"] } : w);
+      }
+    } catch { /* ignore */ }
+    finally { setActionLoading(null); }
   };
+
+  if (loading) return <div className="min-h-screen bg-[#f7f9f5] flex items-center justify-center"><span className="w-8 h-8 border-2 border-[#0f4d2b]/20 border-t-[#0f4d2b] rounded-full animate-spin"/></div>;
+  if (!worker) return null;
 
   const initials = worker.fullName.split(" ").map((n) => n[0]).join("").toUpperCase();
 
   return (
     <div className="flex h-screen bg-[#f7f9f5] overflow-hidden font-body">
-      <div className="hidden lg:flex flex-col w-64 shrink-0 shadow-xl"><Sidebar /></div>
-
+      <div className="hidden lg:flex flex-col w-64 shrink-0 shadow-xl"><Sidebar/></div>
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
-          <div className="w-72 shadow-2xl"><Sidebar mobile onClose={() => setMobileOpen(false)} /></div>
-          <div className="flex-1 bg-black/40" onClick={() => setMobileOpen(false)} />
+          <div className="w-72 shadow-2xl"><Sidebar mobile onClose={() => setMobileOpen(false)}/></div>
+          <div className="flex-1 bg-black/40" onClick={() => setMobileOpen(false)}/>
         </div>
       )}
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
         <header className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between shrink-0 shadow-sm">
           <div className="flex items-center gap-3">
-            <button className="lg:hidden text-gray-500" onClick={() => setMobileOpen(true)}><Menu size={22} /></button>
+            <button className="lg:hidden text-gray-500" onClick={() => setMobileOpen(true)}><Menu size={22}/></button>
             <Link href="/lgu/workers" className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-[#0f4d2b] transition-colors">
-              <ArrowLeft size={16} />Back to Workers
+              <ArrowLeft size={16}/>Back to Workers
             </Link>
           </div>
-
-          {/* Action buttons */}
           <div className="flex items-center gap-2">
             {worker.status === "pending" && (
               <>
-                <button
-                  onClick={() => setConfirmAction("reject")}
-                  disabled={!!actionLoading}
-                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors disabled:opacity-50"
-                >
-                  <XCircle size={14} />Reject
+                <button onClick={() => setConfirmAction("reject")} disabled={!!actionLoading}
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-colors disabled:opacity-50">
+                  <XCircle size={14}/>Reject
                 </button>
-                <button
-                  onClick={() => handleStatusChange("approve")}
-                  disabled={!!actionLoading}
-                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0f4d2b] rounded-xl hover:bg-[#1a7a45] transition-colors shadow-sm disabled:opacity-50"
-                >
-                  {actionLoading === "approving"
-                    ? <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    : <CheckCircle2 size={14} />
-                  }
+                <button onClick={() => handleStatusChange("approve")} disabled={!!actionLoading}
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0f4d2b] rounded-xl hover:bg-[#1a7a45] transition-colors shadow-sm disabled:opacity-50">
+                  {actionLoading === "approving" ? <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"/> : <CheckCircle2 size={14}/>}
                   Approve
                 </button>
               </>
             )}
             {worker.status === "active" && (
-              <button
-                onClick={() => setConfirmAction("deactivate")}
-                disabled={!!actionLoading}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-amber-600 border border-amber-200 rounded-xl hover:bg-amber-50 transition-colors disabled:opacity-50"
-              >
-                <AlertTriangle size={14} />Deactivate Worker
+              <button onClick={() => setConfirmAction("deactivate")} disabled={!!actionLoading}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-amber-600 border border-amber-200 rounded-xl hover:bg-amber-50 transition-colors disabled:opacity-50">
+                <AlertTriangle size={14}/>Deactivate Worker
               </button>
             )}
             {worker.status === "inactive" && (
-              <button
-                onClick={() => handleStatusChange("approve")}
-                disabled={!!actionLoading}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0f4d2b] rounded-xl hover:bg-[#1a7a45] transition-colors shadow-sm disabled:opacity-50"
-              >
-                <CheckCircle2 size={14} />Reactivate Worker
+              <button onClick={() => handleStatusChange("approve")} disabled={!!actionLoading}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0f4d2b] rounded-xl hover:bg-[#1a7a45] transition-colors shadow-sm disabled:opacity-50">
+                <CheckCircle2 size={14}/>Reactivate Worker
               </button>
             )}
           </div>
@@ -180,13 +110,8 @@ export default function WorkerDetailPage() {
         {confirmAction && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
             <div className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4 ${
-                confirmAction === "reject" ? "bg-red-100" : "bg-amber-100"
-              }`}>
-                {confirmAction === "reject"
-                  ? <XCircle size={24} className="text-red-500" />
-                  : <AlertTriangle size={24} className="text-amber-500" />
-                }
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4 ${confirmAction === "reject" ? "bg-red-100" : "bg-amber-100"}`}>
+                {confirmAction === "reject" ? <XCircle size={24} className="text-red-500"/> : <AlertTriangle size={24} className="text-amber-500"/>}
               </div>
               <h3 className="font-display text-lg font-bold text-[#0a2e18] text-center mb-2">
                 {confirmAction === "reject" ? "Reject Worker?" : "Deactivate Worker?"}
@@ -194,19 +119,12 @@ export default function WorkerDetailPage() {
               <p className="text-xs text-gray-500 text-center mb-5 leading-relaxed">
                 {confirmAction === "reject"
                   ? `Are you sure you want to reject ${worker.fullName}'s profile? This will prevent them from being issued a QR code.`
-                  : `Are you sure you want to deactivate ${worker.fullName}? Their QR code will be disabled and they cannot receive new reviews.`
-                }
+                  : `Are you sure you want to deactivate ${worker.fullName}? Their QR code will be disabled and they cannot receive new reviews.`}
               </p>
               <div className="flex gap-2">
-                <button onClick={() => setConfirmAction(null)} className="flex-1 border border-gray-200 text-gray-500 font-semibold py-2.5 rounded-xl text-sm hover:bg-gray-50 transition-colors">
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleStatusChange(confirmAction === "reject" ? "reject" : "deactivate")}
-                  className={`flex-1 font-semibold py-2.5 rounded-xl text-sm text-white transition-colors ${
-                    confirmAction === "reject" ? "bg-red-500 hover:bg-red-600" : "bg-amber-500 hover:bg-amber-600"
-                  }`}
-                >
+                <button onClick={() => setConfirmAction(null)} className="flex-1 border border-gray-200 text-gray-500 font-semibold py-2.5 rounded-xl text-sm hover:bg-gray-50 transition-colors">Cancel</button>
+                <button onClick={() => handleStatusChange(confirmAction === "reject" ? "reject" : "deactivate")}
+                  className={`flex-1 font-semibold py-2.5 rounded-xl text-sm text-white transition-colors ${confirmAction === "reject" ? "bg-red-500 hover:bg-red-600" : "bg-amber-500 hover:bg-amber-600"}`}>
                   {confirmAction === "reject" ? "Yes, Reject" : "Yes, Deactivate"}
                 </button>
               </div>
@@ -215,79 +133,50 @@ export default function WorkerDetailPage() {
         )}
 
         <main className="flex-1 overflow-y-auto p-6 space-y-5">
-
           {/* Profile card */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="bg-[#0f4d2b] h-24 relative">
-              <div className="absolute inset-0 opacity-10" style={{
-                backgroundImage: "linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)",
-                backgroundSize: "20px 20px"
-              }} />
+              <div className="absolute inset-0 opacity-10" style={{backgroundImage:"linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)",backgroundSize:"20px 20px"}}/>
             </div>
             <div className="px-6 pb-6 -mt-10 relative">
               <div className="flex items-end justify-between mb-4">
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#0f4d2b] to-[#1a7a45] flex items-center justify-center text-white font-display font-bold text-2xl shadow-lg border-4 border-white">
-                  {initials}
-                </div>
-                <div className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full mb-1 ${
-                  worker.status === "active" ? "bg-green-100 text-green-700" :
-                  worker.status === "pending" ? "bg-amber-100 text-amber-700" :
-                  "bg-gray-100 text-gray-500"
-                }`}>
-                  {worker.status === "active" ? <CheckCircle2 size={12} /> : worker.status === "pending" ? <Clock size={12} /> : <XCircle size={12} />}
-                  {worker.status.charAt(0).toUpperCase() + worker.status.slice(1)}
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#0f4d2b] to-[#1a7a45] flex items-center justify-center text-white font-display font-bold text-2xl shadow-lg border-4 border-white">{initials}</div>
+                <div className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full mb-1 ${worker.status==="active"?"bg-green-100 text-green-700":worker.status==="pending"?"bg-amber-100 text-amber-700":"bg-gray-100 text-gray-500"}`}>
+                  {worker.status==="active"?<CheckCircle2 size={12}/>:worker.status==="pending"?<Clock size={12}/>:<XCircle size={12}/>}
+                  {worker.status.charAt(0).toUpperCase()+worker.status.slice(1)}
                 </div>
               </div>
-
               <h1 className="font-display text-2xl font-bold text-[#0a2e18] mb-1">{worker.fullName}</h1>
               <p className="text-sm font-semibold text-[#1a7a45] mb-4">{worker.specialization}</p>
-
+              {worker.about && <p className="text-xs text-gray-500 mb-4 italic">"{worker.about}"</p>}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <MapPin size={13} className="text-[#1a7a45] shrink-0" />
-                  <span>{worker.barangay}, {worker.municipality}</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <Calendar size={13} className="text-[#1a7a45] shrink-0" />
-                  <span>Joined {worker.joinedAt}</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <Phone size={13} className="text-[#1a7a45] shrink-0" />
-                  <span>{worker.phone}</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <Mail size={13} className="text-[#1a7a45] shrink-0" />
-                  <span className="truncate">{worker.email}</span>
-                </div>
+                <div className="flex items-center gap-2 text-xs text-gray-500"><MapPin size={13} className="text-[#1a7a45] shrink-0"/><span>{worker.barangay}, {worker.municipality}</span></div>
+                <div className="flex items-center gap-2 text-xs text-gray-500"><Calendar size={13} className="text-[#1a7a45] shrink-0"/><span>Joined {worker.joinedAt}</span></div>
+                <div className="flex items-center gap-2 text-xs text-gray-500"><Phone size={13} className="text-[#1a7a45] shrink-0"/><span>{worker.phone}</span></div>
+                <div className="flex items-center gap-2 text-xs text-gray-500"><Mail size={13} className="text-[#1a7a45] shrink-0"/><span className="truncate">{worker.email}</span></div>
               </div>
             </div>
           </div>
 
           <div className="grid lg:grid-cols-3 gap-5">
-
             {/* Rating summary */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
               <h2 className="font-display text-base font-bold text-[#0a2e18] mb-4">Rating Summary</h2>
               <div className="flex items-center gap-4 mb-4">
                 <div className="text-center">
-                  <p className="font-display text-4xl font-bold text-[#0f4d2b]">{worker.rating}</p>
+                  <p className="font-display text-4xl font-bold text-[#0f4d2b]">{worker.rating || "—"}</p>
                   <div className="flex gap-0.5 my-1">
-                    {[1,2,3,4,5].map((s) => (
-                      <Star key={s} size={12} className={s <= Math.round(worker.rating) ? "fill-yellow-400 text-yellow-400" : "fill-gray-200 text-gray-200"} />
-                    ))}
+                    {[1,2,3,4,5].map((s) => (<Star key={s} size={12} className={s<=Math.round(worker.rating)?"fill-yellow-400 text-yellow-400":"fill-gray-200 text-gray-200"}/>))}
                   </div>
                   <p className="text-[10px] text-gray-400">{worker.totalReviews} reviews</p>
                 </div>
                 <div className="flex-1 space-y-1.5">
-                  {RATING_BREAKDOWN.map(({ stars, count }) => (
+                  {worker.ratingBreakdown.map(({stars,count}) => (
                     <div key={stars} className="flex items-center gap-2">
                       <span className="text-[10px] text-gray-400 w-3">{stars}</span>
-                      <Star size={9} className="fill-yellow-400 text-yellow-400 shrink-0" />
+                      <Star size={9} className="fill-yellow-400 text-yellow-400 shrink-0"/>
                       <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-yellow-400 rounded-full"
-                          style={{ width: `${(count / worker.totalReviews) * 100}%` }}
-                        />
+                        <div className="h-full bg-yellow-400 rounded-full" style={{width:worker.totalReviews>0?`${(count/worker.totalReviews)*100}%`:"0%"}}/>
                       </div>
                       <span className="text-[10px] text-gray-400 w-4">{count}</span>
                     </div>
@@ -295,35 +184,34 @@ export default function WorkerDetailPage() {
                 </div>
               </div>
               <div className="flex items-center gap-1.5 bg-[#f0faf4] border border-[#0f4d2b]/15 rounded-xl p-3">
-                <Shield size={13} className="text-[#0f4d2b]" />
+                <Shield size={13} className="text-[#0f4d2b]"/>
                 <p className="text-[11px] text-[#3d6b4f]">All reviews are OTP-verified</p>
               </div>
             </div>
 
-            {/* Reviews list */}
+            {/* Reviews */}
             <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
               <h2 className="font-display text-base font-bold text-[#0a2e18] mb-4">
-                Verified Reviews
-                <span className="text-sm font-normal text-gray-400 ml-2">({MOCK_REVIEWS.length} shown)</span>
+                Verified Reviews <span className="text-sm font-normal text-gray-400 ml-2">({worker.reviews.length})</span>
               </h2>
-              <div className="space-y-4">
-                {MOCK_REVIEWS.map((review) => (
-                  <div key={review.id} className="border-b border-gray-50 last:border-0 pb-4 last:pb-0">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex gap-0.5">
-                        {[1,2,3,4,5].map((s) => (
-                          <Star key={s} size={13} className={s <= review.rating ? "fill-yellow-400 text-yellow-400" : "fill-gray-200 text-gray-200"} />
-                        ))}
+              {worker.reviews.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-8">No reviews yet.</p>
+              ) : (
+                <div className="space-y-4">
+                  {worker.reviews.map((review) => (
+                    <div key={review.id} className="border-b border-gray-50 last:border-0 pb-4 last:pb-0">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex gap-0.5">{[1,2,3,4,5].map((s) => (<Star key={s} size={13} className={s<=review.rating?"fill-yellow-400 text-yellow-400":"fill-gray-200 text-gray-200"}/>))}</div>
+                        <div className="flex items-center gap-3 text-[10px] text-gray-400">
+                          <span>{review.maskedPhone}</span>
+                          <span>{review.serviceDate}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3 text-[10px] text-gray-400">
-                        <span>{review.maskedPhone}</span>
-                        <span>{review.serviceDate}</span>
-                      </div>
+                      <p className="text-sm text-gray-600 leading-relaxed">{review.comment}</p>
                     </div>
-                    <p className="text-sm text-gray-600 leading-relaxed">{review.comment}</p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </main>
