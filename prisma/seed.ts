@@ -127,7 +127,7 @@ async function main() {
       },
     });
   }
-  console.log("✅ Reviews created");
+  console.log(" Reviews created");
 
   console.log("\n🎉 Seed complete!\n");
   console.log("  LGU Admin:  admin@manila.gov.ph   / Admin@123");
