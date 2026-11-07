@@ -66,8 +66,8 @@ The current implementation focuses on the frontend. Data is mocked, and backend 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/frncsrys/Nexus-Voyagers---Serbisyo-360.git
-cd Nexus-Voyagers---Serbisyo-360
+git clone https://github.com/frncsrys/serbisyo360.git
+cd serbisyo360
 ```
 
 ### 2. Install dependencies
